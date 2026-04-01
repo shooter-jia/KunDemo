@@ -6,13 +6,17 @@ export default class Ball extends cc.Component {
     public level: number = 1;
     private group: string = '';
 
-    public initBall(level: number, group: string) {
+    public init(level: number, group: string) {
         this.label = this.node.getChildByName('lv')?.getComponent(cc.Label) || null;
         this.level = level;
         this.group = group;
         this.updateSize();
         this.updateLabel();
         this.setGroup();
+    }
+
+    public reset() {
+        this.node.group = 'default';
     }
 
     private updateSize() {

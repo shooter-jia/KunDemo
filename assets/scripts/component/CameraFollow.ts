@@ -5,8 +5,8 @@
 // Learn life-cycle callbacks:
 //  - https://docs.cocos.com/creator/manual/en/scripting/life-cycle-callbacks.html
 
-import Launch from "./Launch";
-import GameConfig from './GameConfig';
+import GameMainCtr from "../game/GameMainCtr";
+import GameConfig from '../config/GameConfig';
 
 const {ccclass, property} = cc._decorator;
 
@@ -38,7 +38,7 @@ export default class CameraFollow extends cc.Component {
 
     // 所有物体移动完成后最后更新相机，彻底无抖动
     lateUpdate() {
-        if (!this.target || Launch.isGameOver) return;
+        if (!this.target || GameMainCtr.isGameOver) return;
 
         // 地图总尺寸 3000x3000
         const mapSize = GameConfig.MAP_SIZE;

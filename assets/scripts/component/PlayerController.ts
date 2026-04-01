@@ -1,5 +1,6 @@
-import Launch from "./Launch";
-import GameConfig from './GameConfig';
+import GameMainCtr from "../game/GameMainCtr";
+import GameConfig from '../config/GameConfig';
+import Util from '../common/Util';
 
 const { ccclass, property } = cc._decorator;
 
@@ -22,22 +23,27 @@ export default class PlayerController extends cc.Component {
     }
 
     start() {
-        // 初始化主角位置在地图中心
-        const center = GameConfig.MAP_SIZE / 2;
-        this.playerGroup.setPosition(center, center);
+        this.init();
     }
 
     update(dt: number) {
-        if (Launch.isGameOver || !this.isTouching) return;
+        if (GameMainCtr.isGameOver || !this.isTouching) return;
         // 计算移动位置
         const moveX = this.playerGroup.x + this.moveDir.x * this.moveSpeed * dt;
         const moveY = this.playerGroup.y + this.moveDir.y * this.moveSpeed * dt;
         const limit = GameConfig.MAP_SIZE;
 
         // ✅ 修正：Cocos Creator 2.4.0 原生边界限制（无cc.clampf）
-        const finalX = Math.max(0, Math.min(moveX, limit));
-        const finalY = Math.max(0, Math.min(moveY, limit));
+        const finalX = Util.clamp(moveX, 0, limit);
+        const finalY = Util.clamp(moveY, 0, limit);
         this.playerGroup.setPosition(finalX, finalY);
+    }
+
+    public init() {
+        // 初始化主角位置在地图中心
+        const center = GameConfig.MAP_SIZE / 2;
+        this.playerGroup.setPosition(center, center);
+        this.moveDir = cc.v2(0, 0);
     }
 
     // 触摸开始：记录轮盘中心

@@ -18760,6 +18760,11 @@ declare namespace cc {
 			*/
 			emit(params: any[]): void;		
 		}	
+
+
+        export function init(playerMaxLevel: number, arg1: string) {
+            throw new Error("Function not implemented.");
+        }
 	}
 		
 	/****************************************************

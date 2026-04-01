@@ -1,13 +1,15 @@
-import WildBallMove from "./WildBallMove";
-import GameConfig from './GameConfig';
-import Ball from "./Ball";
-import BallCollision from "./BallCollision";
+import WildBallMove from "../component/WildBallMove";
+import GameConfig from '../config/GameConfig';
+import Ball from "../component/Ball";
+import BallCollision from "../component/BallCollision";
 import MergeManager from "./MergeManager";
+import Util from "../common/Util";
+import BallPools from "./BallPools";
 
 const { ccclass, property } = cc._decorator;
 
 @ccclass
-export default class Launch extends cc.Component {
+export default class GameMainCtr extends cc.Component {
     public static isGameOver = false;
     public static playerMaxLevel = GameConfig.PLAYER_INIT_LEVEL;
 
@@ -52,11 +54,11 @@ export default class Launch extends cc.Component {
     }
 
     private initPlayerBall() {
-        const ballNode = cc.instantiate(this.wildBallPrefab);
-        ballNode.parent = this.playerGroup;
-        const ball = ballNode.addComponent(Ball);
-        ball.initBall(Launch.playerMaxLevel, 'playerBall');
-        ballNode.addComponent(BallCollision);
+        const ballNode = BallPools.get(this.wildBallPrefab, 'ball', this.playerGroup);
+        const ball = Util.getOrAddComponent(ballNode, Ball);
+        ball.init(GameMainCtr.playerMaxLevel, 'playerBall');
+        Util.getOrAddComponent(ballNode, BallCollision);
+        ballNode.setPosition(0, 0);
     }
 
     private initWildBalls() {
@@ -64,7 +66,7 @@ export default class Launch extends cc.Component {
     }
 
     update(dt: number) {
-        if (Launch.isGameOver || this.wildCount >= GameConfig.WILD_MAX_COUNT) return;
+        if (GameMainCtr.isGameOver || this.wildCount >= GameConfig.WILD_MAX_COUNT) return;
         this.spawnTimer += dt;
         if (this.spawnTimer >= GameConfig.SPAWN_INTERVAL) {
             this.spawnWildBall();
@@ -75,15 +77,14 @@ export default class Launch extends cc.Component {
 
     // 🔥 核心：代码动态挂载所有组件（无手动操作）
     private spawnWildBall() {
-        // 1. 创建野生球节点
-        const ballNode = cc.instantiate(this.wildBallPrefab);
-        ballNode.parent = this.wildBallRoot;
+        // 1. 从对象池获取野生球节点
+        const ballNode = BallPools.get(this.wildBallPrefab, 'ball', this.wildBallRoot);
         ballNode.anchorX = 0.5;
         ballNode.anchorY = 0.5;
 
         // 2. 随机位置（边界安全）
-        const x = this.randomRange(50, GameConfig.MAP_SIZE - 50);
-        const y = this.randomRange(50, GameConfig.MAP_SIZE - 50);
+        const x = Util.randomRange(50, GameConfig.MAP_SIZE - 50);
+        const y = Util.randomRange(50, GameConfig.MAP_SIZE - 50);
         ballNode.setPosition(x, y);
 
         // ======================
@@ -91,26 +92,20 @@ export default class Launch extends cc.Component {
         // ======================
 
         // 挂载小球基类组件
-        const ballComp = ballNode.addComponent(Ball);
+        const ballComp = Util.getOrAddComponent(ballNode, Ball);
         
         // 代码挂载野生球随机移动组件（你的核心需求）
-        ballNode.addComponent(WildBallMove);
+        const moveComp = Util.getOrAddComponent(ballNode, WildBallMove);
+        moveComp.init();
 
-        ballNode.addComponent(BallCollision);
+        Util.getOrAddComponent(ballNode, BallCollision);
 
         // 初始化等级
-        const maxLv = Math.min(Launch.playerMaxLevel + 2, GameConfig.MAX_BALL_LEVEL);
-        const lv = this.randomInt(1, maxLv);
-        ballComp.initBall(lv, 'wildBall');
+        const maxLv = Math.min(GameMainCtr.playerMaxLevel + 2, GameConfig.MAX_BALL_LEVEL);
+        const lv = Util.randomInt(1, maxLv);
+        ballComp.init(lv, 'wildBall');
 
         this.wildCount++;
-    }
-
-    private randomRange(min: number, max: number): number {
-        return Math.random() * (max - min) + min;
-    }
-    private randomInt(min: number, max: number): number {
-        return Math.floor(Math.random() * (max - min + 1)) + min;
     }
 
 
@@ -121,16 +116,16 @@ export default class Launch extends cc.Component {
 
         // 吞噬野生球 → 生成玩家球
     public eatWildBall(wildNode: cc.Node, level: number) {
-        wildNode.removeFromParent();
+        // 将野生球放回对象池
+        BallPools.put(wildNode, 'ball');
         this.reduceWildBallCount();
 
         // 玩家节点下 50px 范围内随机生成
-        const ball = cc.instantiate(this.wildBallPrefab);
-        const ballComp = ball.addComponent(Ball);
+        const ball = BallPools.get(this.wildBallPrefab, 'ball', this.playerGroup);
+        const ballComp = Util.getOrAddComponent(ball, Ball);
         // 设置分组+等级
-        ballComp.initBall(level, 'playerBall');
-        ball.addComponent(BallCollision);
-        ball.parent = this.playerGroup;
+        ballComp.init(level, 'playerBall');
+        Util.getOrAddComponent(ball, BallCollision);
         ball.setAnchorPoint(0.5, 0.5);
 
         const rad = Math.random() * GameConfig.PLAYER_BALL_RADIUS;
@@ -145,16 +140,22 @@ export default class Launch extends cc.Component {
         // 1. 恢复场景运行
         cc.director.resume();
         // 2. 重置全局状态
-        Launch.isGameOver = false;
-        Launch.playerMaxLevel = GameConfig.PLAYER_INIT_LEVEL;
+        GameMainCtr.isGameOver = false;
+        GameMainCtr.playerMaxLevel = GameConfig.PLAYER_INIT_LEVEL;
         this.spawnTimer = 0;
 
-        // 3. 销毁所有野生球
-        this.wildBallRoot.removeAllChildren();
+        // 3. 将所有野生球放回对象池
+        const wildBalls = this.wildBallRoot.children.slice();
+        for (const ball of wildBalls) {
+            BallPools.put(ball, 'ball');
+        }
         this.wildCount = 0;
 
-        // 4. 销毁所有玩家球
-        this.playerGroup.removeAllChildren();
+        // 4. 将所有玩家球放回对象池
+        const playerBalls = this.playerGroup.children.slice();
+        for (const ball of playerBalls) {
+            BallPools.put(ball, 'ball');
+        }
 
         // 5. 重新生成初始野生球
         this.initPlayerBall();
@@ -165,17 +166,22 @@ export default class Launch extends cc.Component {
             this.uiPanel.active = false;
         }
 
+        const playerController = this.playerGroup.getComponent('PlayerController');
+        if (playerController) {
+            playerController.init();
+        }
+
         cc.log('游戏已重置！');
     }
 
     private showWinView() {
         this.uiPanel.active = true;
-        this.uiPanel.getChildByName('lb').getComponent(cc.Label).string = '你赢了！';
+        this.uiPanel.getChildByName('lb').getComponent(cc.Label).string = '游戏胜利';
     }
 
     private showLoseView() {
         this.uiPanel.active = true;
-        this.uiPanel.getChildByName('lb').getComponent(cc.Label).string = '你输了！';
+        this.uiPanel.getChildByName('lb').getComponent(cc.Label).string = '游戏失败';
     }
 
     public checkGameOver() {
@@ -189,14 +195,14 @@ export default class Launch extends cc.Component {
 
     // 游戏失败
     public gameOver() {
-        Launch.isGameOver = true;
+        GameMainCtr.isGameOver = true;
         cc.director.pause();
         this.showLoseView();
         cc.log('游戏失败！场景已暂停');
     }
 
     public gameWin() {
-        Launch.isGameOver = true;
+        GameMainCtr.isGameOver = true;
         cc.director.pause();
         this.showWinView();
         cc.log('游戏胜利！场景已暂停');

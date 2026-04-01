@@ -5,8 +5,9 @@
 // Learn life-cycle callbacks:
 //  - https://docs.cocos.com/creator/manual/en/scripting/life-cycle-callbacks.html
 
-import Launch from "./Launch";
-import GameConfig from './GameConfig';
+import GameMainCtr from "../game/GameMainCtr";
+import GameConfig from '../config/GameConfig';
+import Util from '../common/Util';
 
 const {ccclass, property} = cc._decorator;
 
@@ -14,6 +15,7 @@ const {ccclass, property} = cc._decorator;
 export default class WildBallMove extends cc.Component {
     private moveSpeed: number = 60;
     private moveDir: cc.Vec2 = cc.v2(0, 0);
+    private valid: boolean = true;
 
     onLoad() {
         this.randomDir();
@@ -23,15 +25,24 @@ export default class WildBallMove extends cc.Component {
     }
 
     update(dt: number) {
-        if (Launch.isGameOver) return;
+        if (GameMainCtr.isGameOver) return;
+        if (!this.valid) return;
         this.node.x += this.moveDir.x * this.moveSpeed * dt;
         this.node.y += this.moveDir.y * this.moveSpeed * dt;
         this.checkBorder();
     }
 
+    public init() {
+        this.valid = true;
+    }
+
+    public reset() {
+        this.valid = false;
+    }
+
     // 随机移动方向
     private randomDir() {
-        const angle = randomRange(0, Math.PI * 2);
+        const angle = Util.randomRange(0, Math.PI * 2);
         this.moveDir = cc.v2(Math.cos(angle), Math.sin(angle));
     }
 
@@ -41,12 +52,4 @@ export default class WildBallMove extends cc.Component {
         if (this.node.x <= 0 || this.node.x >= limit) this.moveDir.x *= -1;
         if (this.node.y <= 0 || this.node.y >= limit) this.moveDir.y *= -1;
     }
-}
-
-// 原生随机函数
-function randomRange(min: number, max: number): number {
-    return Math.random() * (max - min) + min;
-}
-function randomInt(min: number, max: number): number {
-    return Math.floor(Math.random() * (max - min + 1)) + min;
 }

@@ -7,10 +7,12 @@
 
 const {ccclass, property} = cc._decorator;
 
-import Ball from './Ball';
-import BallCollision from './BallCollision';
-import GameConfig from './GameConfig';
-import Launch from './Launch';
+import Ball from '../component/Ball';
+import BallCollision from '../component/BallCollision';
+import GameConfig from '../config/GameConfig';
+import GameMainCtr from '../game/GameMainCtr';
+import BallPools from '../game/BallPools';
+import Util from '../common/Util';
 
 @ccclass
 export default class MergeManager extends cc.Component {
@@ -18,10 +20,10 @@ export default class MergeManager extends cc.Component {
     @property(cc.Prefab) public ballPrefab: cc.Prefab = null;
 
     // ======================
-    // 🔥 外部调用：传入等级，一次性合成最终结果
+    //  外部调用：传入等级，一次性合成最终结果
     // ======================
     public checkMergeImmediately(targetLevel: number) {
-        if (Launch.isGameOver) return;
+        if (GameMainCtr.isGameOver) return;
         // 开始递归合成（只处理指定等级）
         this.mergeLoop(targetLevel);
     }
@@ -35,8 +37,8 @@ export default class MergeManager extends cc.Component {
         );
 
         if (currentLevel > GameConfig.MAX_BALL_LEVEL) {
-            let launch = cc.find("Canvas").getComponent(Launch);
-            launch.gameWin();
+            let gameCtr = cc.find("Canvas").getComponent(GameMainCtr);
+            gameCtr.gameWin();
             return;
         }
 
@@ -46,7 +48,7 @@ export default class MergeManager extends cc.Component {
         }
 
         // ======================
-        // 🔥 第一步：纯数据计算（不操作任何节点）
+        //  第一步：纯数据计算（不操作任何节点）
         // ======================
         const mergeCount = Math.floor(targetBalls.length / 3); // 可合成次数
         const needDestroyBalls = targetBalls.slice(0, mergeCount * 3); // 待销毁列表
@@ -54,27 +56,26 @@ export default class MergeManager extends cc.Component {
         const needGenerateCount = mergeCount; // 待生成数量
 
         // ======================
-        // 🔥 第二步：统一销毁节点
+        //  第二步：统一销毁节点（放回对象池）
         // ======================
         needDestroyBalls.forEach(ball => {
-            if (ball && ball.isValid) ball.node.destroy();
+            if (ball && ball.isValid) BallPools.put(ball.node, 'ball');
         });
 
         // ======================
-        // 🔥 第三步：统一生成高级球
+        //  第三步：统一生成高级球（从对象池获取）
         // ======================
         for (let i = 0; i < needGenerateCount; i++) {
-            const newBall = cc.instantiate(this.ballPrefab);
-            newBall.parent = this.player;
+            const newBall = BallPools.get(this.ballPrefab, 'ball', this.player);
             // 生成在中心点附近
             newBall.setPosition(this.getRandomPosNearCenter());
-            let ballComp = newBall.addComponent(Ball);
-            ballComp.initBall(newLevel, 'playerBall');
-            newBall.addComponent(BallCollision);
+            let ballComp = Util.getOrAddComponent(newBall, Ball);
+            ballComp.init(newLevel, 'playerBall');
+            Util.getOrAddComponent(newBall, BallCollision);
         }
 
         // 更新最高等级
-        Launch.playerMaxLevel = Math.max(Launch.playerMaxLevel, newLevel);
+        GameMainCtr.playerMaxLevel = Math.max(GameMainCtr.playerMaxLevel, newLevel);
 
         // 递归：继续检查新等级是否可合成
         this.mergeLoop(newLevel);
